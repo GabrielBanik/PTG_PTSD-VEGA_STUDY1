@@ -194,15 +194,15 @@ meth[c("Age", "Education", "child_number", "job", "living", "cancer_family_anamn
 
 
 set.seed(123)
-data_imp <- mice(data, method=meth, predictorMatrix=predM, m=25, maxit = 10) #imputation of missing data - imputed object for the analysis
+data_imp <- mice(data, method=meth, predictorMatrix=predM, m=3, maxit = 3) #imputation of missing data - imputed object for the analysis
 
 #all imputed datasets
 
-x <- complete(data_imp, "long")
+dat <- complete(data_imp, "long")
 
 #convert mice object to list
 library(miceadds)
-x <- miceadds::mids2datlist(data_imp)
+dat <- miceadds::mids2datlist(data_imp)
 
 ########################################################
 ###### next part is needed to be applied to MICE #######
@@ -213,6 +213,15 @@ x <- miceadds::mids2datlist(data_imp)
 data$PTSD <- data$PCL_1 + data$PCL_2 + data$PCL_3 + data$PCL_4 + data$PCL_5 + data$PCL_6 + 
              data$PCL_7 + data$PCL_8 + data$PCL_9 + data$PCL_10 + data$PCL_11 + data$PCL_12 +
              data$PCL_13 + data$PCL_14 + data$PCL_15 + data$PCL_16 + data$PCL_17 + data$PCL_18 + data$PCL_19 + data$PCL_20  
+
+##### aha takto to funguje
+lapply(dat, function(x){cbind(x, PTSD = rowSums(x[,c("PCL_1", "PCL_2", "PCL_3")], na.rm = TRUE))})
+#####
+
+
+
+
+
 
 data$criterionB <- data$PCL_1 + data$PCL_2 + data$PCL_3 + data$PCL_4 + data$PCL_5
 
