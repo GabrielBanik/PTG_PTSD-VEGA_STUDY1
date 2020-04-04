@@ -157,14 +157,31 @@ set.seed(333)
 dataset_imputed <- mice(dataset_for_MM_imp, m=15,maxit=10, meth ='pmm') #imputation of missing data [Minimac29]
 dataset_imputed_complete <- complete(dataset_imputed)
 
-#extracting Minimac29 and adding Minimac29 to dataset for study1
-dataset_imputed_complete <- dataset_imputed_complete[-c(127:290),]
-data$Minimac29 <- dataset_imputed_complete$Minimac29
+#creating Minimac29 mean from all imputed datasets and adding Minimac29 to dataset for study1
+dataset_imputed_complete_all <- complete(dataset_imputed, "long")
+imput1 <- dataset_imputed_complete_all[1:126,31]
+imput2 <- dataset_imputed_complete_all[291:416,31]
+imput3 <- dataset_imputed_complete_all[581:706,31]
+imput4 <- dataset_imputed_complete_all[871:996,31]
+imput5 <- dataset_imputed_complete_all[1161:1286,31]
+imput6 <- dataset_imputed_complete_all[1451:1576,31]
+imput7 <- dataset_imputed_complete_all[1741:1866,31]
+imput8 <- dataset_imputed_complete_all[2031:2156,31]
+imput9 <- dataset_imputed_complete_all[2321:2446,31]
+imput10 <- dataset_imputed_complete_all[2611:2736,31]
+imput11 <- dataset_imputed_complete_all[2901:3026,31]
+imput12 <- dataset_imputed_complete_all[3191:3316,31]
+imput13 <- dataset_imputed_complete_all[3481:3606,31]
+imput14 <- dataset_imputed_complete_all[3771:3896,31]
+imput15 <- dataset_imputed_complete_all[4061:4186,31]
+
+data$Minimac29 <- round((imput1 + imput2 + imput3 + imput4 + imput5 + imput6 + imput7 + imput8 + imput9 + imput10 + imput11 + imput12 + imput13 + imput14 + imput15)/15, digits = 0)
 
 #missing data in dataset for study1
 sum(is.na(data))/prod(dim(data))
-colMeans(is.na(data))
+colMeans(is.na(data)) #missing values are in: pain, discomfort, social_isolation, anxiety_fear, sadness_depression, lost_of_meaning, Minimac28, meaning1:meaning10, PCL9:PCL20, PTGI1
 
+###recoding items
 #recoding the MINI-MAC items (because values was admistrated in reverse order)
 
 data <- data %>% 
@@ -175,6 +192,23 @@ data <- data %>%
               "Minimac22", "Minimac23", "Minimac24", "Minimac25", 
               "Minimac26", "Minimac27", "Minimac28", "Minimac29"), funs(recode(., `1`=4, `2`=3, `3`=2, `4`=1)))
 
+#recoding Resilience items
+
+data <- data %>% 
+  mutate_at (c("Reziliencia2", "Reziliencia4", "Reziliencia6"), funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
+
+#recoding Integration of stressful events item nb. 2
+data <- data %>% 
+  mutate_at ("ISLES2", funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
+
+#religiosity rename factors
+
+data %>% 
+  rename("Religiosity (Intellect)" = Religiozita_1, "Religiosity (Ideology)" = Religiozita_2, 
+         "Religiosity (Public practice)" = Religiozita_3, "Religiosity (Private practice)" = Religiozita_4,
+         "Religiosity (Experience)" = Religiozita_5) %>% 
+  colnames()
+
 #object MICE
 init <-   mice(data, maxit=0) 
 meth <-   init$method
@@ -182,19 +216,21 @@ predM <-   init$predictorMatrix
 
 predM[,c("ID", "Age", "current_state", "Education", "child_number", "job", "living", "cancer_family_anamnesis",
          "time_since_diagnosis", "relaps_cancer", "hospitalisation_number", "type_of_cancer", "metastasis", "chemotherapy", "surgery",
-         "radiotherapy", "hormonal", "alternative", "palliative", "Religiozita_1", "Religiozita_2", "Religiozita_3", "Religiozita_4", 
-         "Religiozita_5", "time_since_dg_categories")] <- 0 #exclusion from the prediction
+         "radiotherapy", "hormonal", "alternative", "palliative", "Religiosity (Intellect)", "Religiosity (Ideology)", 
+         "Religiosity (Public practice)", "Religiosity (Private practice)", 
+         "Religiosity (Experience)", "time_since_dg_categories")] <- 0 #exclusion from the prediction
 predM[c("ID", "Age", "current_state", "Education", "child_number", "job", "living", "cancer_family_anamnesis",
          "time_since_diagnosis", "relaps_cancer", "hospitalisation_number", "type_of_cancer", "metastasis", "chemotherapy", "surgery",
-         "radiotherapy", "hormonal", "alternative", "palliative", "Religiozita_1", "Religiozita_2", "Religiozita_3", "Religiozita_4", 
-         "Religiozita_5", "time_since_dg_categories"),] <- 0 #exclusion from the prediction
+         "radiotherapy", "hormonal", "alternative", "palliative", "Religiosity (Intellect)", "Religiosity (Ideology)", 
+        "Religiosity (Public practice)", "Religiosity (Private practice)", 
+         "Religiosity (Experience)", "time_since_dg_categories"),] <- 0 #exclusion from the prediction
 
 meth[c("Age", "Education", "child_number", "job", "living", "cancer_family_anamnesis", 
        "time_since_diagnosis", "relaps_cancer", "hospitalisation_number", "metastasis", "time_since_dg_categories")] <-  "" #exclusion from the imputation
 
 
 set.seed(123)
-data_imp <- mice(data, method=meth, predictorMatrix=predM, m=3, maxit = 3) #imputation of missing data - imputed object for the analysis
+data_imp <- mice(data, method=meth, predictorMatrix=predM, m=25, maxit = 10) #imputation of missing data - imputed object for the analysis
 
 #all imputed datasets
 
@@ -204,92 +240,77 @@ dat <- complete(data_imp, "long")
 library(miceadds)
 dat <- miceadds::mids2datlist(data_imp)
 
-########################################################
-###### next part is needed to be applied to MICE #######
-########################################################
+#####################################################################################################
+###### next part is applied to basic analysis to list (25 imputed datasets) created from MICE #######
+#####################################################################################################
 
-#sum of scales and subscales
-#PTSD
-data$PTSD <- data$PCL_1 + data$PCL_2 + data$PCL_3 + data$PCL_4 + data$PCL_5 + data$PCL_6 + 
-             data$PCL_7 + data$PCL_8 + data$PCL_9 + data$PCL_10 + data$PCL_11 + data$PCL_12 +
-             data$PCL_13 + data$PCL_14 + data$PCL_15 + data$PCL_16 + data$PCL_17 + data$PCL_18 + data$PCL_19 + data$PCL_20  
+###### if there was no missing values, the basic analysis is carried out on original dataset (data)
 
-##### aha takto to funguje
-lapply(dat, function(x){cbind(x, PTSD = rowSums(x[,c("PCL_1", "PCL_2", "PCL_3")], na.rm = TRUE))})
-#####
+#total PTSD
+dat <- lapply(dat, function(x){cbind(x, PTSD = rowSums(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4",
+                                                     "PCL_5", "PCL_6", "PCL_7", "PCL_8",
+                                                     "PCL_9", "PCL_10", "PCL_11", "PCL_12",
+                                                     "PCL_13", "PCL_14", "PCL_15", "PCL_16",
+                                                     "PCL_17", "PCL_18", "PCL_19", "PCL_20")], na.rm = TRUE))})
+#criterionB
+data$criterionB <- with(data, PCL_1 + PCL_2 + PCL_3 + PCL_4 + PCL_5)
 
-
-
-
-
-
-data$criterionB <- data$PCL_1 + data$PCL_2 + data$PCL_3 + data$PCL_4 + data$PCL_5
-
+#criterionC
 data$criterionC <- data$PCL_6 + data$PCL_7
 
-data$criterionD <- data$PCL_8 + data$PCL_9 + data$PCL_10 + data$PCL_11 + data$PCL_12 + data$PCL_13 + data$PCL_14
+#criterionD
+dat <- lapply(dat, function(x){cbind(x, criterionD = rowSums(x[,c("PCL_8","PCL_9", "PCL_10", "PCL_11", "PCL_12", "PCL_13", "PCL_14")], na.rm = TRUE))})
 
-data$criterionE <- data$PCL_15 + data$PCL_16 + data$PCL_17 + data$PCL_18 + data$PCL_19 + data$PCL_20
-
-#sum in all imputed datasets
+#criterionE
+dat <- lapply(dat, function(x){cbind(x, criterionE = rowSums(x[,c("PCL_15","PCL_16", "PCL_17", "PCL_18", "PCL_19", "PCL_20")], na.rm = TRUE))})
 
 
 #posttraumatic growth
-data$PTG <- data$PTGI_1 + data$PTGI_2 + data$PTGI_3 + data$PTGI_4 + data$PTGI_5 + data$PTGI_6 + data$PTGI_7 + 
-            data$PTGI_8 + data$PTGI_9 + data$PTGI_10
+dat <- lapply(dat, function(x){cbind(x, PTG = rowSums(x[,c("PTGI_1", "PTGI_2", "PTGI_3", "PTGI_4", "PTGI_5", "PTGI_6", "PTGI_7", 
+                                                           "PTGI_8", "PTGI_9", "PTGI_10")], na.rm = TRUE))})
 
 #Resilience
-data <- data %>% 
-  mutate_at (c("Reziliencia2", "Reziliencia4", "Reziliencia6"), funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
-data$REZIL <- data$Reziliencia1 + data$Reziliencia2 + data$Reziliencia3 + data$Reziliencia4 + data$Reziliencia5 + data$Reziliencia6
+data$REZIL <- with(data, Reziliencia1 + Reziliencia2 + Reziliencia3 + Reziliencia4 + Reziliencia5 + Reziliencia6)
 
 #Integration of stressful events
-data <- data %>% 
-  mutate_at ("ISLES2", funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
-data$ISLESFiW <- data$ISLES1 + data$ISLES3 + data$ISLES5 + data$ISLES7 + data$ISLES9 + data$ISLES11 + data$ISLES12 +
-                 data$ISLES13 + data$ISLES14 + data$ISLES15 + data$ISLES16
+data$ISLESFiW <- with(data, ISLES1 + ISLES3 + ISLES5 + ISLES7 + ISLES9 + ISLES11 + ISLES12 + ISLES13 + ISLES14 + ISLES15 + ISLES16)
 
-data$ISLESComp <- data$ISLES2 + data$ISLES4 + data$ISLES6 + data$ISLES8 + data$ISLES10
+data$ISLESComp <- with(data, ISLES2 + ISLES4 + ISLES6 + ISLES8 + ISLES10)
 
 #Mental adjustment to cancer
-data$MMHHless <- data$Minimac1 + data$Minimac2 + data$Minimac4 + data$Minimac5 + data$Minimac7 + data$Minimac8 + 
-                 data$Minimac14 + data$Minimac19 + data$Minimac25
+data$MMHHless <- with(data, Minimac1 + Minimac2 + Minimac4 + Minimac5 + Minimac7 + Minimac8 + Minimac14 + Minimac19 + Minimac25)
 
-data$MMAnx <- data$Minimac9 + data$Minimac10 + data$Minimac16 + data$Minimac19 + data$Minimac20 + data$Minimac21 + 
-              data$Minimac22 + data$Minimac29
+data$MMAnx <- with(data, Minimac9 + Minimac10 + Minimac16 + Minimac19 + Minimac20 + Minimac21 + Minimac22 + Minimac29)
 
-data$MMFight <- data$Minimac3 + data$Minimac6 + data$Minimac12 + data$Minimac13 + data$Minimac17 
+data$MMFight <- with(data, Minimac3 + Minimac6 + Minimac12 + Minimac13 + Minimac17) 
 
-data$MMFatal <- data$Minimac11 + data$Minimac24 + data$Minimac27 + data$Minimac28 
+dat <- lapply(dat, function(x){cbind(x, MMFi = rowSums(x[,c("Minimac11", "Minimac24", "Minimac27", "Minimac28")], na.rm = TRUE))})
 
 data$MMCogAvoid <- data$Minimac15 + data$Minimac18 + data$Minimac23 + data$Minimac26
 
-#religiosity rename factors
-data %>% 
-  rename("Religiosity (Intellect)" = Religiozita_1, "Religiosity (Ideology)" = Religiozita_2, 
-                "Religiosity (Public practice)" = Religiozita_3, "Religiosity (Private practice)" = Religiozita_4,
-                "Religiosity (Experience)" = Religiozita_5) %>% 
-  colnames()
+#transform list back to MICE object
+imp <- miceadds::datlist2mids(dat)
+#complete all imputed dataset after lapply
+imp_complete <- complete(imp, "long")
 
 #####reliability
 
-library(MBESS)
-
 #PTSD
-PTSD <- data[,30:49]
-ci.reliability(PTSD, type = "omega")
+lapply(dat, function(x){ci.reliability(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4",
+                                               "PCL_5", "PCL_6", "PCL_7", "PCL_8",
+                                               "PCL_9", "PCL_10", "PCL_11", "PCL_12",
+                                               "PCL_13", "PCL_14", "PCL_15", "PCL_16",
+                                               "PCL_17", "PCL_18", "PCL_19", "PCL_20")], type = "omega")})
 ##criterionB
 criterionB <- PTSD[,1:5]
 ci.reliability(criterionB, type = "omega")
 ##criterionC
 criterionC <- PTSD[,6:7]
 cor(criterionC, method = "spearman")
-##criterionD
-criterionD <- PTSD[,8:14]
-ci.reliability(criterionD, type = "omega")
-##criterionE 
-criterionE <- PTSD[, 15:20]
-ci.reliability(criterionE, type = "omega")
+#criterionD
+lapply(dat, function(x){ci.reliability(x[,c("PCL_8","PCL_9", "PCL_10", "PCL_11", "PCL_12", "PCL_13", "PCL_14")], type = "omega")})
+#criterionE
+lapply(dat, function(x){ci.reliability(x[,c("PCL_15","PCL_16", "PCL_17", "PCL_18", "PCL_19", "PCL_20")], type = "omega")})
 
 #resilience
 RESIL <- data[,83:88]
@@ -305,8 +326,8 @@ ISLESComp <- subset(data, select = c("ISLES2", "ISLES4", "ISLES6", "ISLES8", "IS
 ci.reliability(ISLESComp, type = "omega")
 
 #posttraumatic growth
-PTG <- data[,89:98]
-ci.reliability(PTG, type = "omega")
+lapply(dat, function(x){ci.reliability(x[,c("PTGI_1","PTGI_2", "PTGI_3", "PTGI_4", "PTGI_5", "PTGI_6", "PTGI_7", "PTGI_8", "PTGI_9",
+                                            "PTGI_10")], type = "omega")})
 
 #mini-mac
 ##hopelessness - helplessness
@@ -321,25 +342,29 @@ ci.reliability(MMAnx, type = "omega")
 MMFight <- subset(data, select = c("Minimac3", "Minimac6", "Minimac12", "Minimac13", "Minimac17"))
 ci.reliability(MMFight, type = "omega")
 ##fatalism
-MMFatal <- subset(data, select = c("Minimac11", "Minimac24", "Minimac27", "Minimac28"))
-ci.reliability(MMFatal, type = "omega")
+lapply(dat, function(x){ci.reliability(x[,c("Minimac11", "Minimac24", "Minimac27", "Minimac28")], type = "omega")})
 ##cognitive avoidance
 MMCogAvoid <- subset(data, select = c("Minimac15", "Minimac18", "Minimac23", "Minimac26"))
 ci.reliability(MMCogAvoid, type = "omega")
 
 #####Cronbach's alpha
-alpha(PTSD)
+lapply(dat, function(x){alpha(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4",                 #PTSD
+                                            "PCL_5", "PCL_6", "PCL_7", "PCL_8",
+                                            "PCL_9", "PCL_10", "PCL_11", "PCL_12",
+                                            "PCL_13", "PCL_14", "PCL_15", "PCL_16",
+                                            "PCL_17", "PCL_18", "PCL_19", "PCL_20")])})
 alpha(criterionB)
 alpha(criterionC)
-alpha(criterionD)
-alpha(criterionE)
-alpha(PTG)
+lapply(dat, function(x){alpha(x[,c("PCL_8","PCL_9", "PCL_10", "PCL_11", "PCL_12", "PCL_13", "PCL_14")])}) #criterionD
+lapply(dat, function(x){alpha(x[,c("PCL_15","PCL_16", "PCL_17", "PCL_18", "PCL_19", "PCL_20")])}) #criterionE
+lapply(dat, function(x){alpha(x[,c("PTGI_1","PTGI_2", "PTGI_3", "PTGI_4", "PTGI_5", "PTGI_6", "PTGI_7", "PTGI_8", "PTGI_9", #PTG
+                                            "PTGI_10")])})
 alpha(ISLESFiW)
 alpha(ISLESComp)
 alpha(RESIL)
 alpha(MMHHless)
 alpha(MMAnx)
 alpha(MMFight)
-alpha(MMFatal)
+lapply(dat, function(x){alpha(x[,c("Minimac11", "Minimac24", "Minimac27", "Minimac28")])}) #fatalism
 alpha(MMCogAvoid)
 
