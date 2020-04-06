@@ -325,8 +325,7 @@ dat <- lapply(dat, function(x){cbind(x, MMCogAvoid = rowSums(x[,c("Minimac15", "
 #self-transcendence
 dat <- lapply(dat, function(x){cbind(x, Self_transcend = rowSums(x[, c("meaning1", "meaning2", "meaning3", "meaning4", "meaning5", 
                                                                        "meaning6", "meaning7", "meaning8", "meaning9", "meaning10")], na.rm = TRUE))})
-
-#transform list back to MICE object
+#######transform list back to MICE object
 imp <- miceadds::datlist2mids(dat)
 #complete all imputed dataset after lapply
 imp_complete <- mice::complete(imp, "long")
@@ -523,5 +522,97 @@ describe(data$time_since_diagnosis)
 describe(data$hospitalisation_number)
 describe(data$child_number)
 
+####PTG a PTSD relationship (curvilinear regression)
 
+#average values for PTG and PTSD from imputed dataset 
+#PTG
+imput1 <- imp_complete[1:126, "PTG"]
+imput2 <- imp_complete[127:252, "PTG"]
+imput3 <- imp_complete[253:378, "PTG"]
+imput4 <- imp_complete[379:504, "PTG"]
+imput5 <- imp_complete[505:630, "PTG"]
+imput6 <- imp_complete[631:756, "PTG"]
+imput7 <- imp_complete[757:882, "PTG"]
+imput8 <- imp_complete[883:1008, "PTG"]
+imput9 <- imp_complete[1009:1134, "PTG"]
+imput10 <- imp_complete[1135:1260, "PTG"]
+imput11 <- imp_complete[1261:1386, "PTG"]
+imput12 <- imp_complete[1387:1512, "PTG"]
+imput13 <- imp_complete[1513:1638, "PTG"]
+imput14 <- imp_complete[1639:1764, "PTG"]
+imput15 <- imp_complete[1765:1890, "PTG"]
+imput16 <- imp_complete[1891:2016, "PTG"]
+imput17 <- imp_complete[2017:2142, "PTG"]
+imput18 <- imp_complete[2143:2268, "PTG"]
+imput19 <- imp_complete[2269:2394, "PTG"]
+imput20 <- imp_complete[2395:2520, "PTG"]
+imput21 <- imp_complete[2521:2646, "PTG"]
+imput22 <- imp_complete[2647:2772, "PTG"]
+imput23 <- imp_complete[2773:2898, "PTG"]
+imput24 <- imp_complete[2899:3024, "PTG"]
+imput25 <- imp_complete[3025:3150, "PTG"]
 
+PTG_avrg <- round((imput1 + imput2 + imput3 + imput4 + imput5 + imput6 + imput7 + imput8 + imput9 + imput10 + imput11 + imput12 + imput13 + 
+                     imput14 + imput15 + imput16 + imput17 + imput18 + imput19 + imput20 + imput21 + imput22 + imput23 +
+                     imput24 + imput25)/25, digits = 0)
+
+#PTSD
+imput1 <- imp_complete[1:126, "PTSD"]
+imput2 <- imp_complete[127:252, "PTSD"]
+imput3 <- imp_complete[253:378, "PTSD"]
+imput4 <- imp_complete[379:504, "PTSD"]
+imput5 <- imp_complete[505:630, "PTSD"]
+imput6 <- imp_complete[631:756, "PTSD"]
+imput7 <- imp_complete[757:882, "PTSD"]
+imput8 <- imp_complete[883:1008, "PTSD"]
+imput9 <- imp_complete[1009:1134, "PTSD"]
+imput10 <- imp_complete[1135:1260, "PTSD"]
+imput11 <- imp_complete[1261:1386, "PTSD"]
+imput12 <- imp_complete[1387:1512, "PTSD"]
+imput13 <- imp_complete[1513:1638, "PTSD"]
+imput14 <- imp_complete[1639:1764, "PTSD"]
+imput15 <- imp_complete[1765:1890, "PTSD"]
+imput16 <- imp_complete[1891:2016, "PTSD"]
+imput17 <- imp_complete[2017:2142, "PTSD"]
+imput18 <- imp_complete[2143:2268, "PTSD"]
+imput19 <- imp_complete[2269:2394, "PTSD"]
+imput20 <- imp_complete[2395:2520, "PTSD"]
+imput21 <- imp_complete[2521:2646, "PTSD"]
+imput22 <- imp_complete[2647:2772, "PTSD"]
+imput23 <- imp_complete[2773:2898, "PTSD"]
+imput24 <- imp_complete[2899:3024, "PTSD"]
+imput25 <- imp_complete[3025:3150, "PTSD"]
+
+PTSD_avrg <- round((imput1 + imput2 + imput3 + imput4 + imput5 + imput6 + imput7 + imput8 + imput9 + imput10 + imput11 + imput12 + imput13 + 
+                     imput14 + imput15 + imput16 + imput17 + imput18 + imput19 + imput20 + imput21 + imput22 + imput23 +
+                     imput24 + imput25)/25, digits = 0)
+
+PTG_PTSD <- data_frame(PTG_avrg, PTSD_avrg)
+is.numeric(PTG_PTSD$PTG_avrg)
+#create quadratic variable - PTSD
+PTG_PTSD$PTSD_avrg1 <- PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg
+PTG_PTSD$PTSD_avrg2 <- PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg
+PTG_PTSD$PTSD_avrg3 <- PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg
+
+#comparing models for curvilinear regression
+model1 <- lm(PTG_avrg~PTSD_avrg, PTG_PTSD)
+AIC(model1)
+model2 <- lm(PTG_avrg~PTSD_avrg + PTSD_avrg1, PTG_PTSD)
+AIC(model2)
+anova(model1, model2)
+model3 <- lm(PTG_avrg~PTSD_avrg + PTSD_avrg1 + PTSD_avrg2, PTG_PTSD)
+AIC(model3)
+anova(model2, model3)
+
+#best fitting model = model2
+#plot regression                                                         adapted from: https://rcompanion.org/rcompanion/e_03.html
+plot(PTG_avrg ~ PTSD_avrg + PTSD_avrg2, data = PTG_PTSD,
+     pch=16,
+     xlab = "PTSD", 
+     ylab = "PTG")
+
+i = seq(min(PTG_PTSD$PTSD_avrg), max(PTG_PTSD$PTSD_avrg), len=100)       #  x-values for line
+predy = predict(model2, 
+                data.frame(PTSD_avrg=i, PTSD_avrg1=i*i))                 #  fitted values
+lines(i, predy,                                                          #  curve
+      lty=1, lwd=2, col="blue")
