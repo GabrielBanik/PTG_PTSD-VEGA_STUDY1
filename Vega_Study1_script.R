@@ -2,7 +2,7 @@
 ##############VEGA TRNAVA STUDY1 (data collection1)#####################
 ########################################################################
 
-#import data
+#load data
 library(readr)
 data <- read_csv("raw_data.csv")
 
@@ -11,6 +11,7 @@ library(tidyverse)
 library(mice)
 library(psych)
 library(MBESS)
+library(miceadds)
 
 #data cleaning and wrangling
 
@@ -148,17 +149,15 @@ data_MM_imp <- data_MM_imp[,c("Minimac1", "Minimac2", "Minimac3", "Minimac4", "M
 ####imputation (MICE)
 dataset_for_MM_imp <- rbind(data_MM_imp, dataset2)
 
-
 #missing values in dataset extracted for Minimac29 imputation
 sum(is.na(dataset_for_MM_imp))/prod(dim(dataset_for_MM_imp))
 colMeans(is.na(dataset_for_MM_imp))
 
 set.seed(333)
 dataset_imputed <- mice(dataset_for_MM_imp, m=15,maxit=10, meth ='pmm') #imputation of missing data [Minimac29]
-dataset_imputed_complete <- complete(dataset_imputed)
 
 #creating Minimac29 mean from all imputed datasets and adding Minimac29 to dataset for study1
-dataset_imputed_complete_all <- complete(dataset_imputed, "long")
+dataset_imputed_complete_all <- mice::complete(dataset_imputed, "long")
 imput1 <- dataset_imputed_complete_all[1:126,31]
 imput2 <- dataset_imputed_complete_all[291:416,31]
 imput3 <- dataset_imputed_complete_all[581:706,31]
@@ -201,13 +200,28 @@ data <- data %>%
 data <- data %>% 
   mutate_at ("ISLES2", funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
 
+#recoding religiosity items (change to higher level of item means higher level of religiosity domain)
+data <- data %>% 
+  mutate_at("Religiozita_1", funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
+table(data$Religiozita_2)
+data <- data %>% 
+  mutate_at("Religiozita_2", funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
+table(data$Religiozita_3)
+data <- data %>% 
+  mutate_at("Religiozita_3", funs(recode(.,`1`=6, `2`=5, `3`=4, `4`=3, `5`=2, `6`=1)))
+table(data$Religiozita_4)
+data <- data %>% 
+  mutate_at("Religiozita_4", funs(recode(., `1`=7, `2`=6, `3`=5, `4`=4, `5`=3, `6`=2, `7`=1)))
+table(data$Religiozita_5)
+data <- data %>% 
+  mutate_at("Religiozita_5", funs(recode(., `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)))
+
 #religiosity rename factors
 
-data %>% 
-  rename("Religiosity (Intellect)" = Religiozita_1, "Religiosity (Ideology)" = Religiozita_2, 
-         "Religiosity (Public practice)" = Religiozita_3, "Religiosity (Private practice)" = Religiozita_4,
-         "Religiosity (Experience)" = Religiozita_5) %>% 
-  colnames()
+data <- data %>% 
+  rename(Religiosity_Intellect = Religiozita_1, Religiosity_Ideology = Religiozita_2, 
+         Religiosity_Public_practice = Religiozita_3, Religiosity_Private_practice = Religiozita_4,
+         Religiosity_Experience = Religiozita_5) 
 
 #object MICE
 init <-   mice(data, maxit=0) 
@@ -216,14 +230,14 @@ predM <-   init$predictorMatrix
 
 predM[,c("ID", "Age", "current_state", "Education", "child_number", "job", "living", "cancer_family_anamnesis",
          "time_since_diagnosis", "relaps_cancer", "hospitalisation_number", "type_of_cancer", "metastasis", "chemotherapy", "surgery",
-         "radiotherapy", "hormonal", "alternative", "palliative", "Religiosity (Intellect)", "Religiosity (Ideology)", 
-         "Religiosity (Public practice)", "Religiosity (Private practice)", 
-         "Religiosity (Experience)", "time_since_dg_categories")] <- 0 #exclusion from the prediction
+         "radiotherapy", "hormonal", "alternative", "palliative", "Religiosity_Intellect", "Religiosity_Ideology", 
+         "Religiosity_Public_practice", "Religiosity_Private_practice", 
+         "Religiosity_Experience", "time_since_dg_categories")] <-  0 #exclusion from the prediction
 predM[c("ID", "Age", "current_state", "Education", "child_number", "job", "living", "cancer_family_anamnesis",
          "time_since_diagnosis", "relaps_cancer", "hospitalisation_number", "type_of_cancer", "metastasis", "chemotherapy", "surgery",
-         "radiotherapy", "hormonal", "alternative", "palliative", "Religiosity (Intellect)", "Religiosity (Ideology)", 
-        "Religiosity (Public practice)", "Religiosity (Private practice)", 
-         "Religiosity (Experience)", "time_since_dg_categories"),] <- 0 #exclusion from the prediction
+         "radiotherapy", "hormonal", "alternative", "palliative", "Religiosity_Intellect", "Religiosity_Ideology", 
+        "Religiosity_Public_practice", "Religiosity_Private_practice", 
+         "Religiosity_Experience", "time_since_dg_categories"),] <- 0 #exclusion from the prediction
 
 meth[c("Age", "Education", "child_number", "job", "living", "cancer_family_anamnesis", 
        "time_since_diagnosis", "relaps_cancer", "hospitalisation_number", "metastasis", "time_since_dg_categories")] <-  "" #exclusion from the imputation
@@ -232,20 +246,17 @@ meth[c("Age", "Education", "child_number", "job", "living", "cancer_family_anamn
 set.seed(123)
 data_imp <- mice(data, method=meth, predictorMatrix=predM, m=25, maxit = 10) #imputation of missing data - imputed object for the analysis
 
-#all imputed datasets
-
-dat <- complete(data_imp, "long")
-
 #convert mice object to list
-library(miceadds)
 dat <- miceadds::mids2datlist(data_imp)
 
 #####################################################################################################
 ###### next part is applied to basic analysis to list (25 imputed datasets) created from MICE #######
 #####################################################################################################
 
-###### if there was no missing values, the basic analysis is carried out on original dataset (data)
+###### if there was no missing values, the basic analysis (descriptives, reliability, etc.) is carried out on original dataset (data)
+###### total score is also compute in list because correlation and regression will be carried out on list
 
+### total score and subscales 
 #total PTSD
 dat <- lapply(dat, function(x){cbind(x, PTSD = rowSums(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4",
                                                      "PCL_5", "PCL_6", "PCL_7", "PCL_8",
@@ -255,8 +266,12 @@ dat <- lapply(dat, function(x){cbind(x, PTSD = rowSums(x[,c("PCL_1", "PCL_2", "P
 #criterionB
 data$criterionB <- with(data, PCL_1 + PCL_2 + PCL_3 + PCL_4 + PCL_5)
 
+dat <- lapply(dat, function(x){cbind(x, criterionB = rowSums(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4", "PCL_5")], na.rm = TRUE))})
+
 #criterionC
 data$criterionC <- data$PCL_6 + data$PCL_7
+
+dat <- lapply(dat, function(x){cbind(x, criterionC = rowSums(x[,c("PCL_7", "PCL_8")], na.rm = TRUE))})
 
 #criterionD
 dat <- lapply(dat, function(x){cbind(x, criterionD = rowSums(x[,c("PCL_8","PCL_9", "PCL_10", "PCL_11", "PCL_12", "PCL_13", "PCL_14")], na.rm = TRUE))})
@@ -272,26 +287,49 @@ dat <- lapply(dat, function(x){cbind(x, PTG = rowSums(x[,c("PTGI_1", "PTGI_2", "
 #Resilience
 data$REZIL <- with(data, Reziliencia1 + Reziliencia2 + Reziliencia3 + Reziliencia4 + Reziliencia5 + Reziliencia6)
 
+dat <- lapply(dat, function(x){cbind(x, REZIL = rowSums(x[,c("Reziliencia1", "Reziliencia2", "Reziliencia3", "Reziliencia4",
+                                                             "Reziliencia5", "Reziliencia6")], na.rm = TRUE))})
+
 #Integration of stressful events
 data$ISLESFiW <- with(data, ISLES1 + ISLES3 + ISLES5 + ISLES7 + ISLES9 + ISLES11 + ISLES12 + ISLES13 + ISLES14 + ISLES15 + ISLES16)
 
+dat <- lapply(dat, function(x){cbind(x, ISLESFiW = rowSums(x[,c("ISLES1", "ISLES3", "ISLES5", "ISLES7",
+                                                             "ISLES9", "ISLES11", "ISLES12", "ISLES13", "ISLES14", "ISLES15", 
+                                                             "ISLES16")], na.rm = TRUE))})
+
 data$ISLESComp <- with(data, ISLES2 + ISLES4 + ISLES6 + ISLES8 + ISLES10)
+
+dat <- lapply(dat, function(x){cbind(x, ISLESComp = rowSums(x[,c("ISLES2", "ISLES4", "ISLES6", "ISLES8", "ISLES10")], na.rm = TRUE))})
 
 #Mental adjustment to cancer
 data$MMHHless <- with(data, Minimac1 + Minimac2 + Minimac4 + Minimac5 + Minimac7 + Minimac8 + Minimac14 + Minimac19 + Minimac25)
 
+dat <- lapply(dat, function(x){cbind(x, MMHHless = rowSums(x[,c("Minimac1", "Minimac2", "Minimac4", "Minimac5",
+                                                                "Minimac7", "Minimac8", "Minimac14", "Minimac19", "Minimac25")], na.rm = TRUE))})
+
 data$MMAnx <- with(data, Minimac9 + Minimac10 + Minimac16 + Minimac19 + Minimac20 + Minimac21 + Minimac22 + Minimac29)
+
+dat <- lapply(dat, function(x){cbind(x, MMAnx = rowSums(x[,c("Minimac9", "Minimac10", "Minimac16", "Minimac19",
+                                                                "Minimac20", "Minimac21", "Minimac22", "Minimac29")], na.rm = TRUE))})
 
 data$MMFight <- with(data, Minimac3 + Minimac6 + Minimac12 + Minimac13 + Minimac17) 
 
-dat <- lapply(dat, function(x){cbind(x, MMFi = rowSums(x[,c("Minimac11", "Minimac24", "Minimac27", "Minimac28")], na.rm = TRUE))})
+dat <- lapply(dat, function(x){cbind(x, MMFight = rowSums(x[,c("Minimac3", "Minimac6", "Minimac12", "Minimac13", "Minimac17")], na.rm = TRUE))})
+
+dat <- lapply(dat, function(x){cbind(x, MMFatal = rowSums(x[,c("Minimac11", "Minimac24", "Minimac27", "Minimac28")], na.rm = TRUE))})
 
 data$MMCogAvoid <- data$Minimac15 + data$Minimac18 + data$Minimac23 + data$Minimac26
+
+dat <- lapply(dat, function(x){cbind(x, MMCogAvoid = rowSums(x[,c("Minimac15", "Minimac18", "Minimac23", "Minimac26")], na.rm = TRUE))})
+
+#self-transcendence
+dat <- lapply(dat, function(x){cbind(x, Self_transcend = rowSums(x[, c("meaning1", "meaning2", "meaning3", "meaning4", "meaning5", 
+                                                                       "meaning6", "meaning7", "meaning8", "meaning9", "meaning10")], na.rm = TRUE))})
 
 #transform list back to MICE object
 imp <- miceadds::datlist2mids(dat)
 #complete all imputed dataset after lapply
-imp_complete <- complete(imp, "long")
+imp_complete <- mice::complete(imp, "long")
 
 #####reliability
 
@@ -302,10 +340,10 @@ lapply(dat, function(x){ci.reliability(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4",
                                                "PCL_13", "PCL_14", "PCL_15", "PCL_16",
                                                "PCL_17", "PCL_18", "PCL_19", "PCL_20")], type = "omega")})
 ##criterionB
-criterionB <- PTSD[,1:5]
+criterionB <- data[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4", "PCL_5")]
 ci.reliability(criterionB, type = "omega")
 ##criterionC
-criterionC <- PTSD[,6:7]
+criterionC <- data[,c("PCL_6", "PCL_7")]
 cor(criterionC, method = "spearman")
 #criterionD
 lapply(dat, function(x){ci.reliability(x[,c("PCL_8","PCL_9", "PCL_10", "PCL_11", "PCL_12", "PCL_13", "PCL_14")], type = "omega")})
@@ -347,6 +385,10 @@ lapply(dat, function(x){ci.reliability(x[,c("Minimac11", "Minimac24", "Minimac27
 MMCogAvoid <- subset(data, select = c("Minimac15", "Minimac18", "Minimac23", "Minimac26"))
 ci.reliability(MMCogAvoid, type = "omega")
 
+#self-transcendence
+lapply(dat, function(x){ci.reliability(x[,c("meaning1", "meaning2", "meaning3", "meaning4", "meaning5", 
+                                            "meaning6", "meaning7", "meaning8", "meaning9", "meaning10")], type = "omega")})
+
 #####Cronbach's alpha
 lapply(dat, function(x){alpha(x[,c("PCL_1", "PCL_2", "PCL_3", "PCL_4",                 #PTSD
                                             "PCL_5", "PCL_6", "PCL_7", "PCL_8",
@@ -367,4 +409,119 @@ alpha(MMAnx)
 alpha(MMFight)
 lapply(dat, function(x){alpha(x[,c("Minimac11", "Minimac24", "Minimac27", "Minimac28")])}) #fatalism
 alpha(MMCogAvoid)
+lapply(dat, function(x){alpha(x[,c("meaning1", "meaning2", "meaning3", "meaning4", "meaning5",
+                                            "meaning6", "meaning7", "meaning8", "meaning9", "meaning10")])}) #self-transcendence
+####### descriptives #######
+
+lapply(dat, function(x){mean(x[,c("PTSD")])})
+lapply(dat, function(x){sd(x[,c("PTSD")])})
+
+#PTSD
+PTSD_descriptive <- with(imp, expr=c("PTSD(mean)"=mean(PTSD), "PTSD(SD)"=stats::sd(PTSD), "PTSD(S.E)"=sd(PTSD)/sqrt(length(PTSD))))
+# pool estimates
+withPool_MI(PTSD_descriptive)
+
+#criterionB
+describe(data$criterionB)
+#criterionC
+describe(data$criterionC)
+
+#criterionD
+criterionD_descriptive <- with(imp, expr=c("criterionD(mean)"=mean(criterionD), "criterionD(SD)"=stats::sd(criterionD), 
+                                           "criterionD(S.E)"=sd(criterionD)/sqrt(length(criterionD))))
+# pool estimates
+withPool_MI(criterionD_descriptive)
+
+#criterionE
+criterionE_descriptive <- with(imp, expr=c("criterionE(mean)"=mean(criterionE), "criterionE(SD)"=stats::sd(criterionE), 
+                                           "criterionE(S.E)"=sd(criterionE)/sqrt(length(criterionE))))
+# pool estimates
+withPool_MI(criterionE_descriptive)
+
+#resilience
+describe(data$REZIL)
+
+#integration of stressful events
+##footing in the world
+describe(data$ISLESFiW)
+##comprehensibility
+describe(data$ISLESComp)
+
+#posttraumatic growth
+PTG_descriptive <- with(imp, expr=c("PTG(mean)"=mean(PTG), "PTG(SD)"=stats::sd(PTG), "PTG(S.E)"=sd(PTG)/sqrt(length(PTG))))
+# pool estimates
+withPool_MI(PTG_descriptive)
+
+#mini-mac
+##hopelessness - helplessness
+describe(data$MMHHless)
+##anxious preocupation
+describe(data$MMAnx)
+##figthing spirit
+describe(data$MMFight)
+##fatalism
+MMFatal_descriptive <- with(imp, expr=c("MMFatal(mean)"=mean(MMFatal), "MMFatal(SD)"=stats::sd(MMFatal), 
+                                        "MMFatal(S.E)"=sd(MMFatal)/sqrt(length(MMFatal))))
+# pool estimates
+withPool_MI(MMFatal_descriptive)
+
+##cognitive avoidance
+describe(data$MMCogAvoid)
+
+#self-transcendence
+Self_transcend_descriptive <- with(imp, expr=c("Self_transcend(mean)"=mean(Self_transcend), "Self_transcend(SD)"=stats::sd(Self_transcend), 
+                                               "Self_transcend(S.E)"=sd(Self_transcend)/sqrt(length(Self_transcend))))
+# pool estimates
+withPool_MI(Self_transcend_descriptive)
+
+#pain
+describe(data$pain)
+#discomfort
+describe(data$discomfort)
+#social_isolation
+describe(data$social_isolation)
+#anxiety_fear
+describe(data$anxiety_fear)
+#sadness_depression
+describe(data$sadness_depression)
+#lost_of_meaining
+describe(data$lost_of_meaning)
+
+#religosity(intellect)
+describe(data$Religiozita_1)
+#religiosity(ideology)
+describe(data$Religiozita_2)
+#religiosity(public practice)
+describe(data$Religiozita_3)
+#religiosity(private practice)
+describe(data$Religiozita_4)
+#religiosity(experience)
+describe(data$Religiozita_5)
+
+##### description of sample #####
+as.data.frame(table(data$Sex)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$current_state)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$Education)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$marital_status)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$job)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$living)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$cancer_family_anamnesis)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$relaps_cancer)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$type_of_cancer)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$time_since_dg_categories)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$chemotherapy)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$surgery)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$radiotherapy)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$hormonal)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$alternative)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$palliative)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+as.data.frame(table(data$metastasis)) %>% rename(Count=1,Freq=2) %>% mutate(Perc=100*Freq/sum(Freq))
+
+#age, time from diagnosis (in months), number of hospitalisation, numebr of children
+describe(data$Age)
+describe(data$time_since_diagnosis)
+describe(data$hospitalisation_number)
+describe(data$child_number)
+
+
 
