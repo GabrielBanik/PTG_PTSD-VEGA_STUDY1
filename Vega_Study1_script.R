@@ -12,6 +12,10 @@ library(mice)
 library(psych)
 library(MBESS)
 library(miceadds)
+library(kableExtra)
+library(MKmisc)
+library(yarrr)
+library(BayesFactor)
 
 #data cleaning and wrangling
 
@@ -79,6 +83,7 @@ data <- data %>%
                                                           `viac než rok až 2 roky`="from 1 year to 2 years", `viac než 2 roky až 5 rokov`="2 to 5 years", `3`="2 to 5 years",
                                                           `viac než 5 rokov`="more than 5 years", `4`="more than 5 years"))) %>% 
         mutate_at(c("cancer_family_anamnesis", "relaps_cancer", "chemotherapy", "surgery", "radiotherapy", "hormonal", "alternative", "palliative"), funs(recode(., `áno`="yes", `nie`="no", `1`="yes", `2`="no", `neviem`="do not know")))
+
 
 #delete mixed variable - type of cancer treatment (more than one category in one row) - it is redundant because type of treatment is in to 6 separate columns
 data[,22] <- NULL
@@ -323,12 +328,33 @@ data$MMCogAvoid <- data$Minimac15 + data$Minimac18 + data$Minimac23 + data$Minim
 dat <- lapply(dat, function(x){cbind(x, MMCogAvoid = rowSums(x[,c("Minimac15", "Minimac18", "Minimac23", "Minimac26")], na.rm = TRUE))})
 
 #self-transcendence
-dat <- lapply(dat, function(x){cbind(x, Self_transcend = rowSums(x[, c("meaning1", "meaning2", "meaning3", "meaning4", "meaning5", 
+dat <- lapply(dat, function(x){cbind(x, Self_transcend = rowSums(x[, c("meaning1", "meaning2", "meaning3", "meaning4", "meaning5",   
                                                                        "meaning6", "meaning7", "meaning8", "meaning9", "meaning10")], na.rm = TRUE))})
+
+#religiosity
+dat <- lapply(dat, function(x){cbind(x, Religiosity = rowSums(x[, c("Religiosity_Intellect", 
+                                                                    "Religiosity_Ideology", 
+                                                                    "Religiosity_Public_practice", 
+                                                                    "Religiosity_Private_practice", 
+                                                                    "Religiosity_Experience")], na.rm = TRUE))})
+
+#new variable (categories and recode education into ordered)       
+dat <- dat %>% 
+  map(~ .x %>% mutate_at("Education", funs(recode(., `high school`=1, `university`=2, `elementary`=0))))
+  
+dat <- dat %>% 
+  map(~ .x %>% mutate(Education = as.numeric(Education)))
+
+dat <- dat %>% 
+  map(~ .x %>% mutate(relationship = case_when(marital_status == "single" ~ "no relationship",
+                                  marital_status == "divorced" ~ "no relationship",
+                                  marital_status == "widowed" ~ "no relationship",
+                                  marital_status == "married" ~ "in relationship")))
+                                                                                                                                            
 #######transform list back to MICE object
-imp <- miceadds::datlist2mids(dat)
+data_imp <- miceadds::datlist2mids(dat)
 #complete all imputed dataset after lapply
-imp_complete <- mice::complete(imp, "long")
+imp_complete <- mice::complete(data_imp, "long")
 
 #####reliability
 
@@ -416,7 +442,7 @@ lapply(dat, function(x){mean(x[,c("PTSD")])})
 lapply(dat, function(x){sd(x[,c("PTSD")])})
 
 #PTSD
-PTSD_descriptive <- with(imp, expr=c("PTSD(mean)"=mean(PTSD), "PTSD(SD)"=stats::sd(PTSD), "PTSD(S.E)"=sd(PTSD)/sqrt(length(PTSD))))
+PTSD_descriptive <- with(data_imp, expr=c("PTSD(mean)"=mean(PTSD), "PTSD(SD)"=stats::sd(PTSD), "PTSD(S.E)"=sd(PTSD)/sqrt(length(PTSD))))
 # pool estimates
 withPool_MI(PTSD_descriptive)
 
@@ -472,6 +498,12 @@ Self_transcend_descriptive <- with(imp, expr=c("Self_transcend(mean)"=mean(Self_
                                                "Self_transcend(S.E)"=sd(Self_transcend)/sqrt(length(Self_transcend))))
 # pool estimates
 withPool_MI(Self_transcend_descriptive)
+
+#self-transcendence
+Religiosity_descriptive <- with(imp, expr=c("Religiosity(mean)"=mean(Religiosity), "Religiosity(SD)"=stats::sd(Religiosity), 
+                                               "Religiosity(S.E)"=sd(Religiosity)/sqrt(length(Religiosity))))
+# pool estimates
+withPool_MI(Religiosity_descriptive)
 
 #pain
 describe(data$pain)
@@ -587,7 +619,7 @@ PTSD_avrg <- round((imput1 + imput2 + imput3 + imput4 + imput5 + imput6 + imput7
                      imput14 + imput15 + imput16 + imput17 + imput18 + imput19 + imput20 + imput21 + imput22 + imput23 +
                      imput24 + imput25)/25, digits = 0)
 
-PTG_PTSD <- data_frame(PTG_avrg, PTSD_avrg)
+PTG_PTSD <- tibble(PTG_avrg, PTSD_avrg)
 is.numeric(PTG_PTSD$PTG_avrg)
 #create quadratic variable - PTSD
 PTG_PTSD$PTSD_avrg1 <- PTG_PTSD$PTSD_avrg*PTG_PTSD$PTSD_avrg
@@ -605,14 +637,255 @@ AIC(model3)
 anova(model2, model3)
 
 #best fitting model = model2
-#plot regression                                                         adapted from: https://rcompanion.org/rcompanion/e_03.html
-plot(PTG_avrg ~ PTSD_avrg + PTSD_avrg2, data = PTG_PTSD,
-     pch=16,
-     xlab = "PTSD", 
-     ylab = "PTG")
+#plot regression  
+ptg_ptsd_curvilinear <- ggplot(model2, aes(x=PTSD_avrg, y=PTG_avrg)) + 
+  geom_point() +
+  stat_smooth(se=T, method='lm', formula=y~poly(x,2)) +
+  xlab("PTSD") +
+  ylab ("Posttraumatic growth") +
+  ggtitle("PTSD as a predictor of Posttraumatic growth") +
+  theme_light()
 
-i = seq(min(PTG_PTSD$PTSD_avrg), max(PTG_PTSD$PTSD_avrg), len=100)       #  x-values for line
-predy = predict(model2, 
-                data.frame(PTSD_avrg=i, PTSD_avrg1=i*i))                 #  fitted values
-lines(i, predy,                                                          #  curve
-      lty=1, lwd=2, col="blue")
+ggsave('ptg_ptsd_curvilinear.png', ptg_ptsd_curvilinear)
+
+##comaprisons--------------------------------
+library(MKmisc)
+library(effectsize)
+library(psychometric)
+#PTG
+mi.t.test(dat, x = "PTG", y = "Sex", var.equal = FALSE) #m1 = 14.808; sd1 = 13.550; n1 = 26; m2 = 29.827; sd2 = 13.129; n = 100
+d1 <- (29.827-14.808)/sqrt(((13.550)^2+(13.129)^2/2)) # d = 0.914
+rd1 <- d_to_r(d1) # r = 0.416
+ci1 <- CIr(r = rd1, n = 126, level = .95)
+ci1lower <- 0.2597838
+ci1upper <- 0.5506576
+
+mi.t.test(dat, x = "PTG", y = "relationship", var.equal = FALSE) #m1 = 27.047; sd1 = 14.309; m2 = 26.208; sd2 = 14.962
+d2 <- (26.208-27.047)/sqrt(((14.309)^2+(14.962)^2/2)) # d = -0.047
+rd2 <- d_to_r(d2) # r = -0.024
+ci2 <- CIr(r = rd2, n = 126, level = .95)
+ci2lower <- -0.1976591
+ci2upper <- 0.1519664
+
+mi.t.test(dat, x = "PTG", y = "current_state", var.equal = FALSE) #m1 = 27.544; sd1 = 12.051; m2 = 26.259; sd2 = 15.802
+d3 <- (26.259-27.544)/sqrt(((12.051)^2+(15.802)^2/2)) # d = -0.078
+rd3 <- d_to_r(d3) # r = -0.039
+ci3 <- CIr(r = rd3, n = 126, level = .95)
+ci3lower <- -0.2125206
+ci3upper <- 0.1367757
+
+mi.t.test(dat, x = "PTG", y = "relaps_cancer", var.equal = FALSE) #m1 = 32.764; sd1 = 10.797; m2 = 23.053; sd2 = 15.399
+d4 <- (23.053-32.764)/sqrt(((10.797)^2+(15.399)^2/2)) # d = -0.633
+rd4 <- d_to_r(d4) # r = -0.302
+ci4 <- CIr(r = rd4, n = 126, level = .95)
+ci4lower <- -0.4528676
+ci4upper <- -0.1340423
+
+mi.t.test(dat, x = "PTG", y = "metastasis", var.equal = FALSE) #m1 = 22.334; sd1 = 14.757; m2 = 30.464; sd2 = 14.441
+d5 <- (30.464-22.334)/sqrt(((14.757)^2+(14.441)^2/2)) # d = 0.453
+rd5 <- d_to_r(d5) # r = 0.221
+ci5 <- CIr(r = rd5, n = 126, level = .95)
+ci5lower <- 0.04786507
+ci5upper <- 0.38110320
+
+rcat1 <- c(rd1, rd2, rd3, rd4, rd5) #correlations vector for PTG and factor variables
+rcatlower1 <- c(ci1lower, ci2lower, ci3lower, ci4lower, ci5lower)
+rcatupper1 <- c(ci1upper, ci2upper, ci3upper, ci4upper, ci5upper)
+
+#PTSD
+mi.t.test(dat, x = "PTSD", y = "Sex", var.equal = FALSE) #m1 = 15.799; sd1 = 18.526; m2 = 26.227; sd2 = 16.651
+d6 <- (26.227-15.799)/sqrt(((18.526)^2+(16.651)^2/2)) # d = 0.475
+rd6 <- d_to_r(d6) # r = 0.231
+ci6 <- CIr(r = rd6, n = 126, level = .95)
+ci6lower <- 0.05856067
+ci6upper <- 0.39023375  
+  
+mi.t.test(dat, x = "PTSD", y = "relationship", var.equal = FALSE) #m1 = 23.596; sd1 = 17.559; m2 = 24.850; sd2 = 17.228
+d7 <- (24.850-23.596)/sqrt(((17.559)^2+(17.228)^2/2)) # d = 0.059
+rd7 <- d_to_r(d7) # r = 0.029
+ci7 <- CIr(r = rd7, n = 126, level = .95)
+ci7lower <- -0.1463313
+ci7upper <- 0.2031909
+
+mi.t.test(dat, x = "PTSD", y = "current_state", var.equal = FALSE) #m1 = 28.040; sd1 = 17.543; m2 = 21.794; sd2 = 17.186
+d8 <- (21.794-28.040)/sqrt(((17.543)^2+(17.186)^2/2)) # d = -0.293
+rd8 <- d_to_r(d8) # r = -0.145
+ci8 <- CIr(r = rd8, n = 126, level = .95)
+ci8lower <- -0.31180635
+ci8upper <- 0.03089312
+
+mi.t.test(dat, x = "PTSD", y = "relaps_cancer", var.equal = FALSE) #m1 = 26.059; sd1 = 13.521; m2 = 18.514; sd2 = 18.590
+d9 <- (18.514-26.059)/sqrt(((13.521)^2+(18.590)^2/2)) # d = -0.400
+rd9 <- d_to_r(d9) # r = -0.196
+ci9 <- CIr(r = rd9, n = 126, level = .95)
+ci9lower <- -0.35876210
+ci9upper <- -0.02201285
+
+mi.t.test(dat, x = "PTSD", y = "metastasis", var.equal = FALSE) #m1 = 15.356; sd1 = 15.232; m2 = 29.750; sd2 = 19.396
+d10 <- (29.750-15.356)/sqrt(((15.232)^2+(19.396)^2/2)) # d = 0.702
+rd10 <- d_to_r(d10) # r = 0.331
+ci10 <- CIr(r = rd10, n = 126, level = .95)
+ci10lower <- 0.1660122
+ci10upper <- 0.4784800
+
+rcat2 <- c(rd6, rd7, rd8, rd9, rd10)
+rcatlower2 <- c(ci6lower, ci7lower, ci8lower, ci9lower, ci10lower)
+rcatupper2 <- c(ci6upper, ci7upper, ci8upper, ci9upper, ci10upper)
+
+##correlations-------------------------------
+dataComplete <- complete(data_imp, "long")
+dataComplete <- dataComplete[,-c(1:2)]
+match(c("PTG", "PTSD", "time_since_diagnosis", "hospitalisation_number", 
+        "pain", "discomfort", "social_isolation", "anxiety_fear", "sadness_depression", "lost_of_meaning",
+        "REZIL", "ISLESFiW", "ISLESComp", "MMHHless", "MMAnx", "MMFight", "MMFatal", "MMCogAvoid", 
+        "Self_transcend", "Religiosity"), names(dataComplete))
+miceadds::micombine.cor(data_imp, 
+                        variables = c(130, 125, 11, 13, 15:20, 131:140), 
+                        conf.level=0.95, method="pearson", nested=FALSE, partial=NULL)
+
+miceadds::micombine.cor(data_imp, 
+                        variables = c(130, 125, 5), 
+                        conf.level=0.95, method="spearman", nested=FALSE, partial=NULL)
+
+correlations <- miceadds::micombine.cor(data_imp, 
+                                        variables = c(130, 125, 11, 13, 15:20, 131:140), 
+                                        conf.level=0.95, method="pearson", nested=FALSE, partial=NULL)
+
+s <- miceadds::micombine.cor(data_imp, 
+                        variables = c(130, 125, 5), 
+                        conf.level=0.95, method="spearman", nested=FALSE, partial=NULL)
+
+#correlations plot
+#ptg~~ptsd plot
+cor.test(PTG_PTSD$PTG_avrg, PTG_PTSD$PTSD_avrg) #produced from average PTG and PTSD
+library(grid)
+r_anotation <-  grobTree(textGrob(paste("Pearson Correlation: 0.302 [.13,.46]"), 
+                                  x = 0.57, y = 0.89, hjust = 0, 
+                                  gp = gpar(col = "red", fontsize = 14, fontface = "bold")))
+
+ptgptsd <- ggplot(data = PTG_PTSD, aes(x=PTSD_avrg, y=PTG_avrg, y)) +
+  geom_point() +
+  geom_smooth() +
+  theme_bw() +
+  theme_minimal() +
+  scale_color_hue(h = c(180, 300)) +
+  annotation_custom(r_anotation) +
+  ylab("Posttraumatic growth") +
+  xlab("PTSD") +
+  ggtitle("Posttraumatic growth and PTSD")
+
+ggsave('ptg_ptsd_scatterplot.png', ptgptsd)
+ 
+#PTG and PTSD correlates
+variables <- c("gender", "education", "partnership", 
+               "remission", "cancer relaps", "metastasis", "diagnosis time", "hospitalisation number", 
+               "pain", "discomfort", "social isolation", "anxiety", "sadness", "lost of meaning",
+               "resilience", "footing in the world", "comprehensibility", 
+               "help-hopelessness", "anxious preocupation", "fighting spirit", "fatalism", "cognitive avoidance", 
+               "self-transcendence", "religiosity")
+
+scor <- s$r
+s1 <- scor[2]
+s2 <- scor[3]
+
+slower <- s$lower95
+slower1 <- slower[2]
+slower2 <- slower[3]
+
+supper <- s$upper95 
+supper1 <- supper[2]
+supper2 <- supper[3]
+
+#sociodemographic correlations vector
+socdem1 <- c(rd1,s1,rd2) 
+socdemlower1 <- c(ci1lower,slower1,ci2lower) 
+socdemupper1 <- c(ci1upper,supper1,ci2upper) 
+
+socdem2 <- c(rd6,s2,rd7) 
+socdemlower2 <- c(ci6lower,slower2,ci7lower) 
+socdemupper2 <- c(ci6upper,supper2,ci7upper) 
+
+#correlations vector for cancer-related
+cancer1 <- c(rd3, rd4, rd5)
+cancerlower1 <- c(ci3lower,ci4lower,ci5lower) 
+cancerupper1 <- c(ci3upper,ci4upper,ci5upper) 
+
+cancer2 <- c(rd8, rd9, rd10)
+cancerlower2 <- c(ci8lower,ci9lower,ci10lower) 
+cancerupper2 <- c(ci8upper,ci9upper,ci10upper) 
+
+#correlations vector for numeric
+r <- correlations$r
+numeric1 <- r[2:19]
+numeric2 <- r[20:37]
+
+lower <- correlations$lower95
+numericlower1 <- lower[2:19]
+numericlower2 <- lower[20:37]
+
+upper <- correlations$upper95
+numericupper1 <- upper[2:19]
+numericupper2 <- upper[20:37]
+
+groups <- c("personal","personal","personal", 
+            "cancer-related", "cancer-related", "cancer-related", "cancer-related", "cancer-related",
+            "emotional", "emotional", "emotional", "emotional", "emotional", "emotional",
+            "psychological", "psychological", "psychological",
+            "psychological", "psychological", "psychological", "psychological", "psychological",
+            "psychological", "psychological")
+
+r1 <- c(socdem1, cancer1, numeric1)
+r2 <- c(socdem2, cancer2, numeric2)
+lower1 <- c(socdemlower1, cancerlower1, numericlower1)
+lower2 <- c(socdemlower2, cancerlower2, numericlower2)
+upper1 <- c(socdemupper1, cancerupper1, numericupper1)
+upper2 <- c(socdemupper2, cancerupper2, numericupper2)
+
+ptg <- tibble(variables, r1, lower1, upper1, groups)
+ptsd <- tibble(variables, r2, lower2, upper2, groups)
+
+ptg_plot <- ggplot(data=ptg, aes(x=variables, y=r1, ymin=lower1, ymax=upper1, color = groups)) +
+  ylim(-0.5,0.6) +
+  geom_pointrange() + 
+  geom_hline(yintercept=0, lty=2) +  # add a dotted line at x=1 after flip
+  coord_flip() +  # flip coordinates (puts labels on y axis)
+  facet_grid(groups~., scales= "free", space="free") +
+  theme_bw() + # use a white background
+  theme(strip.background =element_rect(fill="white")) +
+  theme_minimal() +
+  xlab("correlates") + ylab("Pearson's r") +
+  theme(axis.title.x = element_text(hjust= 0.45)) +
+  labs(title = "Posttraumatic growth",
+       subtitle = "") +
+  theme(plot.title = element_text(hjust = 0.45)) +
+  theme(legend.position = "none") +
+  theme(strip.text = element_blank()) +
+  scale_color_hue(h = c(180, 300))
+  
+
+ptsd_plot <- ggplot(data=ptsd, aes(x=variables, y=r2, ymin=lower2, ymax=upper2, color = groups)) +
+  ylim(-0.75,0.75) +
+  geom_pointrange() + 
+  geom_hline(yintercept=0, lty=2) +  # add a dotted line at x=1 after flip
+  coord_flip() +  # flip coordinates (puts labels on y axis)
+  facet_grid(groups~., scales= "free", space="free") +
+  theme_bw() + # use a white background
+  theme(strip.background =element_rect(fill="white")) +
+  theme_minimal() +
+  xlab("") + ylab("Pearson's r") +
+  labs(title = "PTSD",
+       subtitle = "Pearson Correlation between PTG and PTSD: 0.302 [.13,.46]") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(size = 9, face = "bold.italic", color = "red")) +
+  theme(axis.text.y = element_blank()) +
+  guides(col=guide_legend("Correlates categories")) +
+  scale_color_hue(h = c(180, 300)) 
+  
+
+p <- ptg_plot + ptsd_plot
+ggsave('ptg_ptsd_plot.png', p)
+
+
+
+
+
